@@ -20,14 +20,10 @@ func mutationFlip(offspring typeChromosome, rate float32) typeChromosome {
 	}
 
 	if rand.Intn(1000) <= int(rate*1000) {
-		var point int = rand.Intn(5)
+		var idx int = rand.Intn(5)
+		var point int = rand.Intn(len(championIDs))
 
-		if offspring.genes[point] == 0 {
-			offspring.genes[point] = 1
-		} else {
-			offspring.genes[point] = 0
-		}
-
+		offspring.genes[idx] = championIDs[point]
 		offspring.fitness = calcFitness(offspring)
 	}
 

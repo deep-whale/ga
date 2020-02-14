@@ -14,9 +14,9 @@ import (
 )
 
 type GAResponse struct {
-	BestFitness float64
+	BestFitness  float64
 	WorstFitness float64
-	Genes [][]int
+	Genes        [][]int
 }
 
 // typeChromosome is a structure of chromosome.
@@ -36,7 +36,7 @@ var (
 var numGames int64
 var mapWinChampions map[int][]int64
 
-var numChampions int64
+var championIDs []int
 var mapChampions map[int]string
 
 func init() {
@@ -45,6 +45,8 @@ func init() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	var cursor int = 0
 
 	// win_champions
 	row := db.QueryRow("SELECT count(*) FROM win_champions")
@@ -57,7 +59,7 @@ func init() {
 	}
 	defer rows.Close()
 
-	cursor := 0
+	cursor = 0
 	for rows.Next() {
 		var gameID int64
 		var my string
@@ -67,7 +69,7 @@ func init() {
 			panic(err.Error())
 		}
 
-		var champions = strings.Split(my, ",")
+		var champions []string = strings.Split(my, ",")
 		for _, champion := range champions {
 			key, err := strconv.Atoi(champion)
 			if err != nil {
@@ -76,7 +78,7 @@ func init() {
 
 			_, exists := mapWinChampions[key]
 			if !exists {
-				mapWinChampions[key] = make([]int64, 4)
+				mapWinChampions[key] = make([]int64, 0)
 			}
 			mapWinChampions[key] = append(mapWinChampions[key], gameID)
 		}
@@ -85,9 +87,7 @@ func init() {
 	}
 
 	// champions
-	row = db.QueryRow("SELECT count(*) FROM champions")
-	row.Scan(&numChampions)
-
+	championIDs = make([]int, 0)
 	mapChampions = make(map[int]string)
 	rows, err = db.Query("SELECT name, id FROM champions")
 	if err != nil {
@@ -102,6 +102,7 @@ func init() {
 
 		rows.Scan(&name, &id)
 
+		championIDs = append(championIDs, id)
 		mapChampions[id] = name
 		cursor = cursor + 1
 	}
@@ -117,13 +118,17 @@ func calcFitness(chromosome typeChromosome) float64 {
 
 	var fitness float64 = 0.
 	for i := 0; i < 5; i++ {
-		var count int64 = int64(len(mapWinChampions[chromosome.genes[i]]))
+		var championID int = chromosome.genes[i]
+		_, exists := mapWinChampions[championID]
+		if !exists {
+			continue
+		}
+
+		var count int64 = int64(len(mapWinChampions[championID]))
 		fitness = fitness + (float64(count) / float64(numGames) * 100)
 	}
 
-	fitness = fitness / float64(5)
-
-	return fitness
+	return fitness / float64(5)
 }
 
 // initChromosome is function to create and initialize chromosome.
@@ -132,14 +137,14 @@ func initChromosome() typeChromosome {
 	chromosome.genes = make([]int, 5)
 	chromosome.fitness = -1
 
-	champions := make([]int, 0, numChampions)
-	for champion := range mapChampions {
-		champions = append(champions, champion)
-	}
+	var tempChampionIDs []int = make([]int, len(championIDs))
+	copy(tempChampionIDs, championIDs)
 
 	for i := 0; i < 5; i++ {
-		var point = rand.Intn(int(numChampions))
-		chromosome.genes[i] = champions[point]
+		var point int = rand.Intn(len(tempChampionIDs))
+
+		chromosome.genes[i] = tempChampionIDs[point]
+		tempChampionIDs = append(tempChampionIDs[0:point], tempChampionIDs[point+1:]...)
 	}
 	chromosome.fitness = calcFitness(chromosome)
 
@@ -177,7 +182,7 @@ func Run(sizePopulation int, numGeneration int) *GAResponse {
 
 	var population []typeChromosome = initPopulation(sizePopulation)
 
-	fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
+	// fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
 
 	for generation := 0; generation < numGeneration; generation++ {
 		var parents []typeChromosome = selection(selectionName, population)
@@ -204,18 +209,16 @@ func Run(sizePopulation int, numGeneration int) *GAResponse {
 			return nil
 		}
 
-		//fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
-
 		if population[0].fitness == float64(100) {
 			break
 		}
 	}
 
-	fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
-	fmt.Println("Best chromosome: ", population[sizePopulation-1])
+	// fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
+	// fmt.Println("Best chromosome: ", population[sizePopulation-1])
 
 	genes := make([][]int, 0)
-	for i:=0; i<5; i++ {
+	for i := 0; i < 5; i++ {
 		genes = append(genes, population[sizePopulation-1-i].genes)
 	}
 
