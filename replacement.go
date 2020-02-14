@@ -1,6 +1,7 @@
 package ga
 
 import (
+	"math/rand"
 	"sort"
 	"strings"
 )
@@ -11,7 +12,12 @@ func replacement(name string, population []typeChromosome, offspring typeChromos
 	} else if strings.ToLower(name) == "best" {
 		return replacementBest(population, offspring)
 	} else {
-		return nil
+		var prob int = rand.Intn(100)
+		if prob <= 80 {
+			return replacementWorst(population, offspring)
+		} else {
+			return replacementBest(population, offspring)
+		}
 	}
 }
 

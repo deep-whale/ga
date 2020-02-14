@@ -178,7 +178,7 @@ func Run(sizePopulation int, numGeneration int) *GAResponse {
 	const selectionName string = "roulette"
 	const crossoverName string = "pmx"
 	const mutationName string = "flip"
-	const replacementName string = "worst"
+	const replacementName string = ""
 
 	var population []typeChromosome = initPopulation(sizePopulation)
 
