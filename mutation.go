@@ -9,12 +9,7 @@ func mutation(name string, offspring typeChromosome, rate float32) typeChromosom
 	if strings.ToLower(name) == "flip" {
 		return mutationFlip(offspring, rate)
 	} else {
-		var offspring typeChromosome
-		offspring.size = -1
-		offspring.genes = nil
-		offspring.fitness = -1
-
-		return offspring
+		return typeChromosome{nil, -1}
 	}
 }
 
@@ -25,7 +20,7 @@ func mutationFlip(offspring typeChromosome, rate float32) typeChromosome {
 	}
 
 	if rand.Intn(1000) <= int(rate*1000) {
-		var point int = rand.Intn(offspring.size)
+		var point int = rand.Intn(5)
 
 		if offspring.genes[point] == 0 {
 			offspring.genes[point] = 1

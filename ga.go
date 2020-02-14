@@ -1,49 +1,140 @@
 package ga
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"sort"
+	"strconv"
+	"strings"
+	"sync"
+
+	_ "github.com/lib/pq"
 )
-
-// typeGenes is type of genes in chromosome.
-type typeGenes []int
-
-// typeFitness is type of fitness value for chromosome.
-type typeFitness int
 
 // typeChromosome is a structure of chromosome.
 type typeChromosome struct {
-	size    int
-	genes   typeGenes
-	fitness typeFitness
+	genes   []int
+	fitness float64
+}
+
+const (
+	dbHost     = "localhost"
+	dbPort     = ""
+	dbUser     = ""
+	dbPassword = ""
+	dbName     = "postgres"
+)
+
+var numGames int64
+var mapWinChampions map[int][]int64
+
+var numChampions int64
+var mapChampions map[int]string
+
+func init() {
+	var dbInfo string = fmt.Sprintf("host='%s' port='%s' user='%s' password='%s' dbname='%s' sslmode=disable", dbHost, dbPort, dbUser, dbPassword, dbName)
+	db, err := sql.Open("postgres", dbInfo)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	var cursor int = 0
+
+	// win_champions
+	row := db.QueryRow("SELECT count(*) FROM win_champions")
+	row.Scan(&numGames)
+
+	mapWinChampions = make(map[int][]int64)
+	rows, err := db.Query("SELECT game_id, my FROM win_champions")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer rows.Close()
+
+	cursor = 0
+	for rows.Next() {
+		var gameID int64
+		var my string
+
+		err := rows.Scan(&gameID, &my)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		var champions []string = strings.Split(my, ",")
+		for _, champion := range champions {
+			key, err := strconv.Atoi(champion)
+			if err != nil {
+				panic(err.Error())
+			}
+
+			_, exists := mapWinChampions[key]
+			if !exists {
+				mapWinChampions[key] = make([]int64, 4)
+			}
+			mapWinChampions[key] = append(mapWinChampions[key], gameID)
+		}
+
+		cursor = cursor + 1
+	}
+
+	// champions
+	row = db.QueryRow("SELECT count(*) FROM champions")
+	row.Scan(&numChampions)
+
+	mapChampions = make(map[int]string)
+	rows, err = db.Query("SELECT name, id FROM champions")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer rows.Close()
+
+	cursor = 0
+	for rows.Next() {
+		var name string
+		var id int
+
+		rows.Scan(&name, &id)
+
+		mapChampions[id] = name
+		cursor = cursor + 1
+	}
+
+	defer db.Close()
 }
 
 // calcFitness is function to calculate fitness of chromosome.
-func calcFitness(chromosome typeChromosome) typeFitness {
-	if chromosome.size == -1 {
+func calcFitness(chromosome typeChromosome) float64 {
+	if chromosome.genes == nil {
 		return -1
 	}
 
-	var fitness typeFitness = 0
-	for i := 0; i < chromosome.size; i++ {
-		if chromosome.genes[i] == 1 {
-			fitness = fitness + 1
-		}
+	var fitness float64 = 0.
+	for i := 0; i < 5; i++ {
+		var count int64 = int64(len(mapWinChampions[chromosome.genes[i]]))
+		fitness = fitness + (float64(count) / float64(numGames) * 100)
 	}
+
+	fitness = fitness / float64(5)
 
 	return fitness
 }
 
 // initChromosome is function to create and initialize chromosome.
-func initChromosome(sizeChromosome int) typeChromosome {
+func initChromosome() typeChromosome {
 	var chromosome typeChromosome
-	chromosome.size = sizeChromosome
-	chromosome.genes = make([]int, sizeChromosome)
+	chromosome.genes = make([]int, 5)
 	chromosome.fitness = -1
 
-	for i := 0; i < sizeChromosome; i++ {
-		chromosome.genes[i] = rand.Intn(2)
+	champions := make([]int, 0, numChampions)
+	for champion := range mapChampions {
+		champions = append(champions, champion)
+	}
+
+	for i := 0; i < 5; i++ {
+		var point int = rand.Intn(int(numChampions))
+		chromosome.genes[i] = champions[point]
 	}
 	chromosome.fitness = calcFitness(chromosome)
 
@@ -51,11 +142,19 @@ func initChromosome(sizeChromosome int) typeChromosome {
 }
 
 // initPopulation is function to create population.
-func initPopulation(sizeChromosome int, sizePopulation int) []typeChromosome {
+func initPopulation(sizePopulation int) []typeChromosome {
+	var wg sync.WaitGroup
+	wg.Add(sizePopulation)
+
 	var population []typeChromosome = make([]typeChromosome, sizePopulation)
-	for i := 0; i < sizePopulation; i++ {
-		population[i] = initChromosome(sizeChromosome)
+	for idx := 0; idx < sizePopulation; idx++ {
+		go func(idx int) {
+			defer wg.Done()
+			population[idx] = initChromosome()
+		}(idx)
 	}
+
+	wg.Wait()
 
 	sort.Slice(population, func(i, j int) bool {
 		return population[i].fitness < population[j].fitness
@@ -64,13 +163,14 @@ func initPopulation(sizeChromosome int, sizePopulation int) []typeChromosome {
 	return population
 }
 
-func Run(sizeChromosome int, sizePopulation int, numGeneration int) {
+// Run is function ...
+func Run(sizePopulation int, numGeneration int) {
 	const selectionName string = "roulette"
 	const crossoverName string = "onepoint"
 	const mutationName string = "flip"
 	const replacementName string = "worst"
 
-	var population []typeChromosome = initPopulation(sizeChromosome, sizePopulation)
+	var population []typeChromosome = initPopulation(sizePopulation)
 
 	fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
 
@@ -82,13 +182,13 @@ func Run(sizeChromosome int, sizePopulation int, numGeneration int) {
 		}
 
 		var offspring typeChromosome = crossover(crossoverName, parents)
-		if offspring.size == -1 {
+		if offspring.genes == nil {
 			fmt.Println(crossoverName, " is not valid option.")
 			return
 		}
 
 		offspring = mutation(mutationName, offspring, 0.0001)
-		if offspring.size == -1 {
+		if offspring.genes == nil {
 			fmt.Println(mutationName, " is not valid option.")
 			return
 		}
@@ -99,10 +199,13 @@ func Run(sizeChromosome int, sizePopulation int, numGeneration int) {
 			return
 		}
 
-		if population[0].fitness == typeFitness(sizeChromosome) {
+		//fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
+
+		if population[0].fitness == float64(100) {
 			break
 		}
 	}
 
 	fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
+	fmt.Println("Best chromosome: ", population[sizePopulation-1])
 }

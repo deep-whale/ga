@@ -20,7 +20,7 @@ func selectionRoulette(population []typeChromosome) []typeChromosome {
 		return nil
 	}
 
-	var sumFitness typeFitness = 0
+	var sumFitness float64 = 0
 	for i := 0; i < len(population); i++ {
 		sumFitness = sumFitness + population[i].fitness
 	}
@@ -28,8 +28,8 @@ func selectionRoulette(population []typeChromosome) []typeChromosome {
 	const numParents int = 2
 	var parents []typeChromosome = make([]typeChromosome, numParents)
 	for i := 0; i < numParents; i++ {
-		var point typeFitness = typeFitness(rand.Intn(int(sumFitness)))
-		var sum typeFitness = 0
+		var point float64 = float64(rand.Intn(int(sumFitness)))
+		var sum float64 = 0
 		for j := 0; j < len(population); j++ {
 			sum = sum + population[j].fitness
 			if point < sum {
