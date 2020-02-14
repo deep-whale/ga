@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,18 +13,24 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type GAResponse struct {
+	BestFitness float64
+	WorstFitness float64
+	Genes [][]int
+}
+
 // typeChromosome is a structure of chromosome.
 type typeChromosome struct {
 	genes   []int
 	fitness float64
 }
 
-const (
-	dbHost     = "localhost"
-	dbPort     = ""
-	dbUser     = ""
-	dbPassword = ""
-	dbName     = "postgres"
+var (
+	dbHost     = os.Getenv("DB_HOST")
+	dbPort     = os.Getenv("DB_PORT")
+	dbUser     = os.Getenv("DB_USER")
+	dbPassword = os.Getenv("DB_PASSWORD")
+	dbName     = os.Getenv("DB_NAME")
 )
 
 var numGames int64
@@ -39,8 +46,6 @@ func init() {
 		panic(err.Error())
 	}
 
-	var cursor int = 0
-
 	// win_champions
 	row := db.QueryRow("SELECT count(*) FROM win_champions")
 	row.Scan(&numGames)
@@ -52,7 +57,7 @@ func init() {
 	}
 	defer rows.Close()
 
-	cursor = 0
+	cursor := 0
 	for rows.Next() {
 		var gameID int64
 		var my string
@@ -62,7 +67,7 @@ func init() {
 			panic(err.Error())
 		}
 
-		var champions []string = strings.Split(my, ",")
+		var champions = strings.Split(my, ",")
 		for _, champion := range champions {
 			key, err := strconv.Atoi(champion)
 			if err != nil {
@@ -133,7 +138,7 @@ func initChromosome() typeChromosome {
 	}
 
 	for i := 0; i < 5; i++ {
-		var point int = rand.Intn(int(numChampions))
+		var point = rand.Intn(int(numChampions))
 		chromosome.genes[i] = champions[point]
 	}
 	chromosome.fitness = calcFitness(chromosome)
@@ -164,7 +169,7 @@ func initPopulation(sizePopulation int) []typeChromosome {
 }
 
 // Run is function ...
-func Run(sizePopulation int, numGeneration int) {
+func Run(sizePopulation int, numGeneration int) *GAResponse {
 	const selectionName string = "roulette"
 	const crossoverName string = "onepoint"
 	const mutationName string = "flip"
@@ -178,25 +183,25 @@ func Run(sizePopulation int, numGeneration int) {
 		var parents []typeChromosome = selection(selectionName, population)
 		if (len(parents) == 0) || (parents == nil) {
 			fmt.Println(selectionName, " is not valid option.")
-			return
+			return nil
 		}
 
 		var offspring typeChromosome = crossover(crossoverName, parents)
 		if offspring.genes == nil {
 			fmt.Println(crossoverName, " is not valid option.")
-			return
+			return nil
 		}
 
 		offspring = mutation(mutationName, offspring, 0.0001)
 		if offspring.genes == nil {
 			fmt.Println(mutationName, " is not valid option.")
-			return
+			return nil
 		}
 
 		population = replacement(replacementName, population, offspring)
 		if (len(population) == 0) || (population == nil) {
 			fmt.Println(replacementName, " is not valid option.")
-			return
+			return nil
 		}
 
 		//fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
@@ -208,4 +213,16 @@ func Run(sizePopulation int, numGeneration int) {
 
 	fmt.Println("Worst: ", population[0].fitness, " Best: ", population[sizePopulation-1].fitness)
 	fmt.Println("Best chromosome: ", population[sizePopulation-1])
+
+	genes := make([][]int, 0)
+	for i:=0; i<5; i++ {
+		genes = append(genes, population[sizePopulation-1-i].genes)
+	}
+
+	res := GAResponse{
+		BestFitness:  population[sizePopulation-1].fitness,
+		WorstFitness: population[0].fitness,
+		Genes:        genes,
+	}
+	return &res
 }
