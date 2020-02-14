@@ -7,6 +7,6 @@ RUN go build -ldflags="-w -s" -v github.com/deep-whale/ga/cmd/ga/
 
 
 FROM alpine
-COPY --from=go /ga ga/
+COPY --from=go /ga /ga
 EXPOSE 80
 ENTRYPOINT ["/ga"]
